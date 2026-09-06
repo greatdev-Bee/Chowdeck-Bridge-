@@ -47,7 +47,7 @@ async def main():
                 pass 
 
             if not API_KEYS or key_index >= len(API_KEYS):
-                print("❌ No valid API keys available!")
+                print("❌ No valid API keys available!", flush=True)
                 await asyncio.sleep(60)
                 continue
 
@@ -65,7 +65,7 @@ async def main():
                             tid = str(tw.get("id") or "")
                             if tid:
                                 seen_tweet_ids.add(tid)
-                        print(f"✅ Baseline locked. Tracking {len(seen_tweet_ids)} known ID(s).")
+                        print(f"✅ Baseline locked. Tracking {len(seen_tweet_ids)} known ID(s).", flush=True)
 
                     for tw in tweets:
                         tid = str(tw.get("id") or "")
@@ -76,33 +76,33 @@ async def main():
                             matches = re.findall(r'\b[A-Z0-9]{4,}\b', text)
                             code = matches[0] if matches else text.strip()
                             
-                            print(f"🚨 New Code Isolated [{code}] from Tweet ID {tid}")
+                            print(f"🚨 New Code Isolated [{code}] from Tweet ID {tid}", flush=True)
                             await client.post(RAILWAY_WEBHOOK_URL, json={"text": code}, timeout=10.0)
                             
-                elif res.status_code in [401, 403, 429]:
-                    print(f"⚠️ Active key exhausted or unauthorized. Rotating...")
-                    failed_key_num = key_index + 1
-                    key_index += 1
-                    
-                    if key_index < len(API_KEYS):
-                        alert_msg = (
-                            f"⚠️ *Twitter API Key #{failed_key_num} Exhausted!*\n"
-                            f"The current key ran out of credits or hit a rate limit.\n"
-                            f"🔄 Automatically rotating to key #{key_index + 1} now."
-                        )
-                        await send_admin_alert(alert_msg)
-                    else:
-                        alert_msg = (
-                            f"❌ *CRITICAL: All Twitter API Keys Exhausted!*\n"
-                            f"All {len(API_KEYS)} configured keys have run dry. "
-                            f"The polling bridge has stopped scanning.\n"
-                            f"🚨 Please log in and replace your keys immediately!"
-                        )
-                        await send_admin_alert(alert_msg)
-            except (httpx.RequestError, OSError):
+                else:
+                    print(f"⚠️ API Error [{res.status_code}]: {res.text}", flush=True)
+                    if res.status_code in [401, 403, 429]:
+                        failed_key_num = key_index + 1
+                        key_index += 1
+                        
+                        if key_index < len(API_KEYS):
+                            alert_msg = (
+                                f"⚠️ *Twitter API Key #{failed_key_num} Exhausted/Invalid!*\n"
+                                f"Status {res.status_code}. Rotating to key #{key_index + 1}."
+                            )
+                            await send_admin_alert(alert_msg)
+                        else:
+                            alert_msg = (
+                                f"❌ *CRITICAL: All Twitter API Keys Failed!*\n"
+                                f"Status {res.status_code}: {res.text}\n"
+                                f"🚨 Please check your keys immediately!"
+                            )
+                            await send_admin_alert(alert_msg)
+            except (httpx.RequestError, OSError) as e:
+                print(f"Network error: {e}", flush=True)
                 await asyncio.sleep(5)
             except Exception as e:
-                print(f"Polling error: {e}")
+                print(f"Polling error: {e}", flush=True)
 
             await asyncio.sleep(7)
 
