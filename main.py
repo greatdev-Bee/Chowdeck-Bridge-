@@ -9,7 +9,7 @@ STATUS_URL = os.getenv("STATUS_URL", "https://chow-bot-production.up.railway.app
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
 
-RAW_KEYS = os.getenv("TWITTER_API_KEYS", "YOUR_TWITTERAPI_KEY_HERE")
+RAW_KEYS = os.getenv("TWITTER_API_KEYS", "YOUR_GETXAPI_KEY_HERE")
 API_KEYS = [k.strip() for k in RAW_KEYS.split(",") if k.strip()]
 
 TARGET_USER_NAME = os.getenv("TARGET_USER_NAME", "Oyinlola6464")
@@ -26,11 +26,11 @@ async def send_admin_alert(text):
         print(f"Failed to send Telegram alert: {e}", flush=True)
 
 async def main():
-    url = "https://api.twitterapi.io/twitter/user/last_tweets"
+    url = "https://api.getxapi.com/twitter/user/tweets"
     params = {"userName": TARGET_USER_NAME}
     
     key_index = 0
-    print(f"📱 Cloud TwitterAPI.io Bridge active for @{TARGET_USER_NAME}...", flush=True)
+    print(f"📱 Cloud GetXAPI Bridge active for @{TARGET_USER_NAME}...", flush=True)
     seen_tweet_ids = set()
     
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -52,7 +52,7 @@ async def main():
                 continue
 
             current_key = API_KEYS[key_index]
-            headers = {"X-API-Key": current_key}
+            headers = {"Authorization": f"Bearer {current_key}"}
             
             try:
                 res = await client.get(url, params=params, headers=headers)
@@ -87,13 +87,13 @@ async def main():
                         
                         if key_index < len(API_KEYS):
                             alert_msg = (
-                                f"⚠️ *Twitter API Key #{failed_key_num} Exhausted/Invalid!*\n"
+                                f"⚠️ *GetXAPI Key #{failed_key_num} Exhausted/Invalid!*\n"
                                 f"Status {res.status_code}. Rotating to key #{key_index + 1}."
                             )
                             await send_admin_alert(alert_msg)
                         else:
                             alert_msg = (
-                                f"❌ *CRITICAL: All Twitter API Keys Failed!*\n"
+                                f"❌ *CRITICAL: All GetXAPI Keys Failed!*\n"
                                 f"Status {res.status_code}: {res.text}\n"
                                 f"🚨 Please check your keys immediately!"
                             )
