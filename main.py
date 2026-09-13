@@ -56,7 +56,24 @@ async def main():
             
             try:
                 res = await client.get(url, params=params, headers=headers)
-                if res.status_code == 200:
+                
+                # Check for body-level errors even if status is 200
+                is_exhausted = False
+                exhaustion_reason = f"HTTP {res.status_code}"
+                
+                if res.status_code in [401, 403, 429, 402]:
+                    is_exhausted = True
+                elif res.status_code == 200:
+                    try:
+                        body_json = res.json()
+                        body_str = res.text.lower()
+                        if "quota" in body_str or "limit" in body_str or "exhausted" in body_str or body_json.get("error"):
+                            is_exhausted = True
+                            exhaustion_reason = "API Quota/Limit reached in body"
+                    except Exception:
+                        pass
+
+                if res.status_code == 200 and not is_exhausted:
                     data = res.json()
                     tweets = data.get("tweets", [])
                     
@@ -80,24 +97,23 @@ async def main():
                             await client.post(RAILWAY_WEBHOOK_URL, json={"text": code}, timeout=10.0)
                             
                 else:
-                    print(f"⚠️ API Error [{res.status_code}]: {res.text}", flush=True)
-                    if res.status_code in [401, 403, 429]:
-                        failed_key_num = key_index + 1
-                        key_index += 1
-                        
-                        if key_index < len(API_KEYS):
-                            alert_msg = (
-                                f"⚠️ *GetXAPI Key #{failed_key_num} Exhausted/Invalid!*\n"
-                                f"Status {res.status_code}. Rotating to key #{key_index + 1}."
-                            )
-                            await send_admin_alert(alert_msg)
-                        else:
-                            alert_msg = (
-                                f"❌ *CRITICAL: All GetXAPI Keys Failed!*\n"
-                                f"Status {res.status_code}: {res.text}\n"
-                                f"🚨 Please check your keys immediately!"
-                            )
-                            await send_admin_alert(alert_msg)
+                    print(f"⚠️ API Error / Exhaustion [{exhaustion_reason}]: {res.text}", flush=True)
+                    failed_key_num = key_index + 1
+                    key_index += 1
+                    
+                    if key_index < len(API_KEYS):
+                        alert_msg = (
+                            f"⚠️ *GetXAPI Key #{failed_key_num} Exhausted/Invalid!*\n"
+                            f"Reason: {exhaustion_reason}. Rotating to key #{key_index + 1}."
+                        )
+                        await send_admin_alert(alert_msg)
+                    else:
+                        alert_msg = (
+                            f"❌ *CRITICAL: All GetXAPI Keys Failed!*\n"
+                            f"Reason: {exhaustion_reason}\n"
+                            f"🚨 Please check your keys immediately!"
+                        )
+                        await send_admin_alert(alert_msg)
             except (httpx.RequestError, OSError) as e:
                 print(f"Network error: {e}", flush=True)
                 await asyncio.sleep(5)
